@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Olympic Analytics Suite</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top left, #1e1b4b, #0f172a, #000000);
+            background-attachment: fixed;
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        .loader {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #6366f1;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .data-table th { background: rgba(15, 23, 42, 0.95); position: sticky; top: 0; z-index: 10; }
+        .data-table tr:hover td { background: rgba(99, 102, 241, 0.1); }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="glass-panel border-b-0 sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-indigo-500 to-purple-500 p-2 rounded-lg">
+                    <i data-lucide="medal" class="text-white h-6 w-6"></i>
+                </div>
+                <h1 class="text-2xl font-bold tracking-tight text-white">Olympic<span class="text-indigo-400">Analytics</span></h1>
+            </div>
+            <div class="hidden md:flex items-center space-x-6 text-sm font-medium text-slate-400">
+                <span class="hover:text-white transition-colors cursor-pointer">Dashboard</span>
+                <span class="hover:text-white transition-colors cursor-pointer">Analysis</span>
+                <span class="hover:text-white transition-colors cursor-pointer">Data</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-6 flex-grow space-y-8">
+        
+        <!-- Upload Section -->
+        <div id="upload-section" class="py-10">
+            <div class="glass-panel rounded-2xl p-16 text-center hover:border-indigo-500/50 transition-all duration-300 cursor-pointer relative group" id="drop-zone">
+                <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept=".csv">
+                
+                <div class="relative z-0 flex flex-col items-center justify-center space-y-4">
+                    <div class="bg-slate-800/50 p-6 rounded-full group-hover:bg-indigo-500/10 group-hover:scale-110 transition-all duration-300">
+                        <i data-lucide="upload-cloud" class="w-12 h-12 text-indigo-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-bold text-white">Upload Dataset</h3>
+                        <p class="text-slate-400 mt-2">Drag & drop <code class="bg-slate-800 px-2 py-1 rounded text-indigo-300 font-mono text-sm">athlete_events.csv</code> to begin</p>
+                    </div>
+                </div>
+            </div>
+            <div id="error-message" class="hidden mt-6 p-4 bg-red-900/20 text-red-300 rounded-lg border border-red-500/30 flex items-center gap-3">
+                <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                <span id="error-text"></span>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loader-section" class="hidden flex-col items-center justify-center py-32">
+            <div class="loader mb-6"></div>
+            <p class="text-indigo-300 font-medium animate-pulse tracking-wide">PROCESSING HISTORICAL DATA...</p>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboard-content" class="hidden space-y-8">
+            
+            <!-- KPI Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- KPI 1 -->
+                <div class="glass-panel p-6 rounded-2xl border-l-4 border-l-blue-500">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-slate-400 text-xs uppercase font-bold tracking-wider">Athletes</p>
+                            <h3 class="text-3xl font-extrabold text-white mt-2" id="kpi-athletes">-</h3>
+                        </div>
+                        <div class="p-3 bg-blue-500/10 rounded-lg">
+                            <i data-lucide="users" class="text-blue-400 h-6 w-6"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- KPI 2 -->
+                <div class="glass-panel p-6 rounded-2xl border-l-4 border-l-yellow-500">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-slate-400 text-xs uppercase font-bold tracking-wider">Medals Awarded</p>
+                            <h3 class="text-3xl font-extrabold text-white mt-2" id="kpi-medals">-</h3>
+                        </div>
+                        <div class="p-3 bg-yellow-500/10 rounded-lg">
+                            <i data-lucide="award" class="text-yellow-400 h-6 w-6"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- KPI 3 -->
+                <div class="glass-panel p-6 rounded-2xl border-l-4 border-l-emerald-500">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-slate-400 text-xs uppercase font-bold tracking-wider">Sports</p>
+                            <h3 class="text-3xl font-extrabold text-white mt-2" id="kpi-sports">-</h3>
+                        </div>
+                        <div class="p-3 bg-emerald-500/10 rounded-lg">
+                            <i data-lucide="dumbbell" class="text-emerald-400 h-6 w-6"></i>
+                        </div>
+                    </div>
+                </div>
+                <!-- KPI 4 -->
+                <div class="glass-panel p-6 rounded-2xl border-l-4 border-l-purple-500">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-slate-400 text-xs uppercase font-bold tracking-wider">Era</p>
+                            <h3 class="text-2xl font-extrabold text-white mt-2" id="kpi-years">-</h3>
+                        </div>
+                        <div class="p-3 bg-purple-500/10 rounded-lg">
+                            <i data-lucide="history" class="text-purple-400 h-6 w-6"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart Row 1: Race & Gender Trends -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Bar Race -->
+                <div class="glass-panel rounded-2xl overflow-hidden flex flex-col">
+                    <div class="p-6 border-b border-white/5 flex items-center gap-3">
+                        <div class="bg-indigo-500/20 p-2 rounded-lg">
+                            <i data-lucide="trending-up" class="text-indigo-400 w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-white">The Medal Race</h2>
+                            <p class="text-slate-400 text-sm">Top 10 Nations Over Time</p>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-slate-900 flex-grow">
+                        <div id="chart-race" class="w-full h-[500px]"></div>
+                    </div>
+                </div>
+
+                <!-- Gender Participation -->
+                <div class="glass-panel rounded-2xl overflow-hidden flex flex-col">
+                    <div class="p-6 border-b border-white/5 flex items-center gap-3">
+                        <div class="bg-pink-500/20 p-2 rounded-lg">
+                            <i data-lucide="users" class="text-pink-400 w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-white">Gender Participation</h2>
+                            <p class="text-slate-400 text-sm">Male vs Female Athletes Over Time</p>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-slate-900 flex-grow">
+                        <div id="chart-gender" class="w-full h-[500px]"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart Row 2: Sunburst & Top Athletes -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                <!-- Sunburst -->
+                <div class="glass-panel rounded-2xl overflow-hidden flex flex-col">
+                    <div class="p-6 border-b border-white/5 flex items-center gap-3">
+                        <div class="bg-orange-500/20 p-2 rounded-lg">
+                            <i data-lucide="pie-chart" class="text-orange-400 w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-white">Medal Distribution</h2>
+                            <p class="text-slate-400 text-sm">Hierarchy by Sport & Medal Type</p>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-slate-900 flex-grow">
+                        <div id="chart-sunburst" class="w-full h-[500px]"></div>
+                    </div>
+                </div>
+
+                <!-- Hall of Fame -->
+                <div class="glass-panel rounded-2xl overflow-hidden flex flex-col">
+                    <div class="p-6 border-b border-white/5 flex items-center gap-3">
+                        <div class="bg-teal-500/20 p-2 rounded-lg">
+                            <i data-lucide="trophy" class="text-teal-400 w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-white">Olympic Hall of Fame</h2>
+                            <p class="text-slate-400 text-sm">Top 10 Athletes by Total Medals</p>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-slate-900 flex-grow">
+                        <div id="chart-hall-of-fame" class="w-full h-[500px]"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Table Section -->
+            <div class="glass-panel rounded-2xl overflow-hidden">
+                <div class="p-6 border-b border-white/5">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-teal-500/20 p-2 rounded-lg">
+                                <i data-lucide="table" class="text-teal-400 w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-bold text-white">Raw Dataset</h2>
+                                <p class="text-slate-400 text-sm">Explore individual records</p>
+                            </div>
+                        </div>
+                        <!-- Filters -->
+                        <div class="flex flex-wrap gap-3 items-center">
+                            <input type="text" id="filter-name" placeholder="Filter Name..." class="bg-slate-700/50 border border-slate-600 text-white text-sm rounded-lg block p-2.5 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" id="filter-team" placeholder="Filter Country..." class="bg-slate-700/50 border border-slate-600 text-white text-sm rounded-lg block p-2.5 placeholder-slate-400 focus:ring-blue-500 focus:border-blue-500">
+                            <select id="filter-sport" class="bg-slate-700/50 border border-slate-600 text-white text-sm rounded-lg block p-2.5 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">All Sports</option>
+                                <!-- Populated by JS -->
+                            </select>
+                            <select id="filter-medal" class="bg-slate-700/50 border border-slate-600 text-white text-sm rounded-lg block p-2.5 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">All Medals</option>
+                                <option value="Gold">Gold</option>
+                                <option value="Silver">Silver</option>
+                                <option value="Bronze">Bronze</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Pagination Controls -->
+                    <div class="flex justify-end gap-2 items-center">
+                        <button id="prev-page" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">Previous</button>
+                        <span id="page-info" class="px-4 py-2 text-sm text-slate-400 flex items-center">Page 1</span>
+                        <button id="next-page" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">Next</button>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-slate-300 data-table">
+                        <thead class="text-xs text-slate-400 uppercase bg-slate-800/80">
+                            <tr>
+                                <th class="px-6 py-4">Name</th>
+                                <th class="px-6 py-4">Sex</th>
+                                <th class="px-6 py-4">Age</th>
+                                <th class="px-6 py-4">Team</th>
+                                <th class="px-6 py-4">Year</th>
+                                <th class="px-6 py-4">Sport</th>
+                                <th class="px-6 py-4">Medal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="divide-y divide-slate-700/50">
+                            <!-- Rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="no-results" class="hidden p-8 text-center text-slate-500">
+                    No results found matching your filters.
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // Global Palette (Pastel for Teams/Sports)
+        const pastelPalette = [
+            '#FFB3BA', '#FFDFBA', '#FFFFBA', '#BAFFC9', '#BAE1FF', 
+            '#E6B3FF', '#FFB3E6', '#B3FFFF', '#FFFFE0', '#FFDAC1',
+            '#E2F0CB', '#B5EAD7', '#C7CEEA', '#F0E68C', '#DDA0DD',
+            '#98FB98', '#AFEEEE', '#DB7093', '#FFEFD5', '#FFDAB9'
+        ];
+
+        // Global State for Table
+        let rawData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        const rowsPerPage = 15;
+
+        // DOM Elements
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const loader = document.getElementById('loader-section');
+        const dashboard = document.getElementById('dashboard-content');
+        const uploadSection = document.getElementById('upload-section');
+        const errorMsg = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+
+        // Filter Elements
+        const filterName = document.getElementById('filter-name');
+        const filterTeam = document.getElementById('filter-team');
+        const filterSport = document.getElementById('filter-sport');
+        const filterMedal = document.getElementById('filter-medal');
+
+        // Event Listeners for File Upload
+        fileInput.addEventListener('change', handleFileSelect);
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-indigo-500', 'bg-slate-800');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-indigo-500', 'bg-slate-800');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-indigo-500', 'bg-slate-800');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelect({ target: fileInput });
+            }
+        });
+
+        // Pagination Listeners
+        document.getElementById('prev-page').addEventListener('click', () => changePage(-1));
+        document.getElementById('next-page').addEventListener('click', () => changePage(1));
+
+        // Filter Listeners
+        [filterName, filterTeam, filterSport, filterMedal].forEach(el => {
+            el.addEventListener('input', applyFilters);
+        });
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type !== "text/csv" && !file.name.endsWith('.csv')) {
+                showError("Invalid file format. Please upload a standard CSV file.");
+                return;
+            }
+
+            uploadSection.classList.add('hidden');
+            loader.classList.remove('hidden');
+            loader.classList.add('flex');
+
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                worker: true,
+                complete: function(results) {
+                    try {
+                        processData(results.data);
+                        loader.classList.add('hidden');
+                        loader.classList.remove('flex');
+                        dashboard.classList.remove('hidden');
+                    } catch (err) {
+                        console.error(err);
+                        loader.classList.add('hidden');
+                        uploadSection.classList.remove('hidden');
+                        showError("Error processing data: " + err.message);
+                    }
+                },
+                error: function(err) {
+                    loader.classList.add('hidden');
+                    uploadSection.classList.remove('hidden');
+                    showError("CSV Parse Error: " + err.message);
+                }
+            });
+        }
+
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorMsg.classList.remove('hidden');
+        }
+
+        function processData(data) {
+            // Basic filtering
+            const cleanData = data.filter(d => d.Year && d.ID);
+            rawData = cleanData;
+            filteredData = cleanData;
+
+            // --- Update KPIs ---
+            const uniqueAthletes = new Set(cleanData.map(d => d.ID)).size;
+            const medals = cleanData.filter(d => d.Medal && d.Medal !== 'NA' && d.Medal !== 'None').length;
+            const uniqueSports = new Set(cleanData.map(d => d.Sport)).size;
+            const years = [...new Set(cleanData.map(d => d.Year))].sort();
+            const yearRange = `${years[0]} - ${years[years.length - 1]}`;
+
+            document.getElementById('kpi-athletes').textContent = uniqueAthletes.toLocaleString();
+            document.getElementById('kpi-medals').textContent = medals.toLocaleString();
+            document.getElementById('kpi-sports').textContent = uniqueSports.toLocaleString();
+            document.getElementById('kpi-years').textContent = yearRange;
+
+            // --- Populate Sport Filter ---
+            const uniqueSportNames = [...new Set(cleanData.map(d => d.Sport))].sort();
+            uniqueSportNames.forEach(sport => {
+                const option = document.createElement('option');
+                option.value = sport;
+                option.textContent = sport;
+                filterSport.appendChild(option);
+            });
+
+            // --- Generate Charts ---
+            renderRaceChart(cleanData);
+            renderGenderChart(cleanData); 
+            renderSunburstChart(cleanData);
+            renderHallOfFame(cleanData);
+            
+            // --- Render Table ---
+            renderTable(1);
+        }
+
+        // --- Filter Logic ---
+        function applyFilters() {
+            const nameVal = filterName.value.toLowerCase();
+            const teamVal = filterTeam.value.toLowerCase();
+            const sportVal = filterSport.value;
+            const medalVal = filterMedal.value;
+
+            filteredData = rawData.filter(row => {
+                const matchesName = !nameVal || (row.Name && row.Name.toLowerCase().includes(nameVal));
+                const matchesTeam = !teamVal || (row.Team && row.Team.toLowerCase().includes(teamVal));
+                const matchesSport = !sportVal || row.Sport === sportVal;
+                
+                let matchesMedal = true;
+                if (medalVal) {
+                    matchesMedal = row.Medal === medalVal;
+                }
+                
+                return matchesName && matchesTeam && matchesSport && matchesMedal;
+            });
+
+            renderTable(1);
+        }
+
+        // --- Table Logic ---
+        function renderTable(page) {
+            currentPage = page;
+            const start = (page - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const pageData = filteredData.slice(start, end);
+            const tbody = document.getElementById('table-body');
+            const noResults = document.getElementById('no-results');
+            
+            tbody.innerHTML = '';
+            
+            if (filteredData.length === 0) {
+                noResults.classList.remove('hidden');
+                document.getElementById('page-info').textContent = `Page 0 of 0`;
+                document.getElementById('prev-page').disabled = true;
+                document.getElementById('next-page').disabled = true;
+                return;
+            } else {
+                noResults.classList.add('hidden');
+            }
+            
+            pageData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/30 transition-colors";
+                
+                // Medal Styling
+                let medalBadge = `<span class="px-2 py-1 rounded text-xs text-slate-500 font-mono">None</span>`;
+                if(row.Medal === 'Gold') medalBadge = `<span class="px-2 py-1 rounded bg-yellow-500/20 text-yellow-300 text-xs font-bold border border-yellow-500/30">Gold</span>`;
+                if(row.Medal === 'Silver') medalBadge = `<span class="px-2 py-1 rounded bg-slate-400/20 text-slate-300 text-xs font-bold border border-slate-400/30">Silver</span>`;
+                if(row.Medal === 'Bronze') medalBadge = `<span class="px-2 py-1 rounded bg-orange-700/20 text-orange-300 text-xs font-bold border border-orange-700/30">Bronze</span>`;
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-white">${row.Name}</td>
+                    <td class="px-6 py-4">${row.Sex}</td>
+                    <td class="px-6 py-4">${row.Age || '-'}</td>
+                    <td class="px-6 py-4">${row.Team}</td>
+                    <td class="px-6 py-4">${row.Year}</td>
+                    <td class="px-6 py-4">${row.Sport}</td>
+                    <td class="px-6 py-4">${medalBadge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('prev-page').disabled = currentPage === 1;
+            document.getElementById('next-page').disabled = currentPage >= totalPages;
+        }
+
+        function changePage(delta) {
+            renderTable(currentPage + delta);
+        }
+
+        // --- Chart 1: Bar Chart Race (Dark Mode Fix & Rank Logic) ---
+        function renderRaceChart(data) {
+            const yearlyData = {}; 
+            const teams = new Set();
+            const years = new Set();
+
+            data.forEach(d => {
+                if (d.Medal && d.Medal !== 'NA' && d.Medal !== 'None') {
+                    const y = d.Year;
+                    const t = d.Team;
+                    years.add(y);
+                    teams.add(t);
+                    if (!yearlyData[y]) yearlyData[y] = {};
+                    yearlyData[y][t] = (yearlyData[y][t] || 0) + 1;
+                }
+            });
+
+            const sortedYears = Array.from(years).sort((a, b) => a - b);
+            const uniqueTeams = Array.from(teams);
+            
+            const teamColors = {};
+            // Deterministic color assignment based on index to avoid black/random issues
+            uniqueTeams.forEach((team, index) => {
+                teamColors[team] = pastelPalette[index % pastelPalette.length];
+            });
+
+            let teamCumulative = {}; 
+            uniqueTeams.forEach(t => teamCumulative[t] = 0);
+
+            // Determine Global Max for Fixed Scale
+            let globalMax = 0;
+            sortedYears.forEach(year => {
+                if(yearlyData[year]) {
+                    Object.entries(yearlyData[year]).forEach(([team, count]) => {
+                        teamCumulative[team] += count;
+                    });
+                }
+            });
+            globalMax = Math.max(...Object.values(teamCumulative));
+
+            // Reset cumulative for actual frame generation
+            uniqueTeams.forEach(t => teamCumulative[t] = 0);
+
+            const frames = [];
+            
+            sortedYears.forEach(year => {
+                if (yearlyData[year]) {
+                    Object.entries(yearlyData[year]).forEach(([team, count]) => {
+                        teamCumulative[team] += count;
+                    });
+                }
+
+                const rankings = uniqueTeams
+                    .map(team => ({ team: team, total: teamCumulative[team] }))
+                    .filter(item => item.total > 0) 
+                    .sort((a, b) => b.total - a.total); 
+
+                const top10 = rankings.slice(0, 10).map((item, index) => ({
+                    ...item,
+                    rank: index + 1 
+                }));
+
+                frames.push({
+                    name: year.toString(),
+                    data: [{
+                        x: top10.map(d => d.total),
+                        y: top10.map(d => d.rank), 
+                        text: top10.map(d => d.team),
+                        ids: top10.map(d => d.team), 
+                        textposition: 'inside',
+                        textfont: { size: 14, color: '#1e293b' }, // Dark text on pastel bars
+                        orientation: 'h',
+                        type: 'bar',
+                        marker: {
+                            color: top10.map(d => teamColors[d.team]), // Use deterministic colors
+                            line: { width: 0 }
+                        },
+                        width: 0.8
+                    }]
+                });
+            });
+
+            const initialFrame = frames[0];
+
+            const layout = {
+                title: false,
+                paper_bgcolor: 'rgba(0,0,0,0)', // Transparent background
+                plot_bgcolor: 'rgba(0,0,0,0)', // Transparent background
+                font: { color: "#ffffff" }, // White text
+                xaxis: { 
+                    title: 'Cumulative Medals', 
+                    range: [0, globalMax * 1.1], 
+                    gridcolor: '#334155', // Dark grid lines
+                    color: '#94a3b8' // Tick labels color
+                },
+                yaxis: { 
+                    autorange: 'reversed', 
+                    showticklabels: false,
+                    gridcolor: 'transparent' 
+                },
+                margin: { l: 20, r: 20, t: 20, b: 50 },
+                updatemenus: [{
+                    x: 0.1, y: 0, yanchor: "top", xanchor: "right",
+                    showactive: false,
+                    direction: "left",
+                    type: "buttons",
+                    pad: { "t": 87, "r": 10 },
+                    buttons: [{
+                        method: "animate",
+                        args: [null, {
+                            mode: "immediate",
+                            fromcurrent: true,
+                            transition: { duration: 500, easing: "cubic-in-out" },
+                            frame: { duration: 1500, redraw: false }
+                        }],
+                        label: "Play"
+                    }, {
+                        method: "animate",
+                        args: [[null], {
+                            mode: "immediate",
+                            transition: { duration: 0 },
+                            frame: { duration: 0, redraw: false }
+                        }],
+                        label: "Pause"
+                    }]
+                }],
+                sliders: [{
+                    pad: { l: 130, t: 55 },
+                    currentvalue: {
+                        visible: true,
+                        prefix: "Year: ",
+                        xanchor: "right",
+                        font: { size: 20, color: "#94a3b8" }
+                    },
+                    steps: frames.map(f => ({
+                        label: f.name,
+                        method: "animate",
+                        args: [[f.name], {
+                            mode: "immediate",
+                            transition: { duration: 500 },
+                            frame: { duration: 1500, redraw: false }
+                        }]
+                    }))
+                }]
+            };
+
+            Plotly.newPlot('chart-race', initialFrame.data, { ...layout, responsive: true }).then(function() {
+                Plotly.addFrames('chart-race', frames);
+            });
+        }
+
+        // --- New Chart: Gender Participation (Pastel) ---
+        function renderGenderChart(data) {
+            const years = [...new Set(data.map(d => d.Year))].sort();
+            const countsM = [];
+            const countsF = [];
+
+            years.forEach(year => {
+                const yearData = data.filter(d => d.Year === year);
+                const uniqueM = new Set(yearData.filter(d => d.Sex === 'M').map(d => d.ID)).size;
+                const uniqueF = new Set(yearData.filter(d => d.Sex === 'F').map(d => d.ID)).size;
+                countsM.push(uniqueM);
+                countsF.push(uniqueF);
+            });
+
+            const traceM = {
+                x: years,
+                y: countsM,
+                name: 'Male',
+                type: 'scatter',
+                fill: 'tozeroy',
+                line: { color: '#BAE1FF' } // Pastel Blue
+            };
+
+            const traceF = {
+                x: years,
+                y: countsF,
+                name: 'Female',
+                type: 'scatter',
+                fill: 'tozeroy',
+                line: { color: '#FFB3BA' } // Pastel Red
+            };
+
+            const layout = {
+                paper_bgcolor: "rgba(0,0,0,0)",
+                plot_bgcolor: "rgba(0,0,0,0)",
+                font: { color: "#ffffff" },
+                xaxis: { title: 'Year', gridcolor: '#334155' },
+                yaxis: { title: 'Number of Athletes', gridcolor: '#334155' },
+                margin: { l: 50, r: 20, t: 20, b: 50 },
+                legend: { x: 0, y: 1 }
+            };
+
+            Plotly.newPlot('chart-gender', [traceM, traceF], { ...layout, responsive: true });
+        }
+
+        // --- Chart 2: Sunburst (FIXED: Metallic Colors) ---
+        function renderSunburstChart(data) {
+            const sportCounts = {};
+            
+            data.forEach(d => {
+                if (d.Medal && d.Medal !== 'NA' && d.Medal !== 'None') {
+                    const sport = d.Sport;
+                    const medal = d.Medal;
+                    if (!sportCounts[sport]) sportCounts[sport] = { Gold: 0, Silver: 0, Bronze: 0, Total: 0 };
+                    sportCounts[sport][medal]++;
+                    sportCounts[sport].Total++;
+                }
+            });
+
+            const topSports = Object.entries(sportCounts)
+                .sort((a, b) => b[1].Total - a[1].Total)
+                .slice(0, 15);
+
+            // Determine Total Medals for Root Node
+            const totalMedalsDisplayed = topSports.reduce((sum, item) => sum + item[1].Total, 0);
+
+            const labels = ["All Medals"];
+            const parents = [""];
+            const values = [totalMedalsDisplayed]; // Root needs value = sum of children for branchvalues: total
+            const colors = ["#ffffff"]; 
+
+            topSports.forEach(([sport, counts], index) => {
+                labels.push(sport);
+                parents.push("All Medals");
+                values.push(counts.Total);
+                colors.push(pastelPalette[index % pastelPalette.length]); 
+
+                ['Gold', 'Silver', 'Bronze'].forEach(medal => {
+                    if (counts[medal] > 0) {
+                        labels.push(`${sport} - ${medal}`);
+                        parents.push(sport);
+                        values.push(counts[medal]);
+                        if(medal === 'Gold') colors.push('#FFD700'); // Metallic Gold
+                        else if(medal === 'Silver') colors.push('#C0C0C0'); // Metallic Silver
+                        else colors.push('#CD7F32'); // Metallic Bronze
+                    }
+                });
+            });
+
+            const dataPlot = [{
+                type: "sunburst",
+                labels: labels,
+                parents: parents,
+                values: values,
+                branchvalues: "total", // This forces wedges to fill width
+                textinfo: "label+value",
+                marker: { colors: colors },
+                hoverinfo: "label+value+percent parent"
+            }];
+
+            const layout = {
+                margin: { l: 0, r: 0, b: 0, t: 0 },
+                paper_bgcolor: "rgba(0,0,0,0)",
+                font: { color: "#ffffff" }
+            };
+
+            Plotly.newPlot('chart-sunburst', dataPlot, { ...layout, responsive: true });
+        }
+
+        // --- Chart 3: Hall of Fame (Pastel) ---
+        function renderHallOfFame(data) {
+            const athleteMedals = {};
+
+            data.forEach(d => {
+                if (d.Medal && d.Medal !== 'NA' && d.Medal !== 'None') {
+                    if (!athleteMedals[d.Name]) athleteMedals[d.Name] = 0;
+                    athleteMedals[d.Name]++;
+                }
+            });
+
+            const topAthletes = Object.entries(athleteMedals)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10)
+                .reverse(); // For horizontal bar
+
+            const trace = {
+                x: topAthletes.map(d => d[1]),
+                y: topAthletes.map(d => d[0]),
+                type: 'bar',
+                orientation: 'h',
+                marker: {
+                    color: topAthletes.map((d, i) => pastelPalette[i % pastelPalette.length])
+                }
+            };
+
+            const layout = {
+                paper_bgcolor: "rgba(0,0,0,0)",
+                plot_bgcolor: "rgba(0,0,0,0)",
+                font: { color: "#ffffff" },
+                xaxis: { title: 'Total Medals', gridcolor: '#334155' },
+                margin: { l: 150, r: 20, t: 20, b: 50 }
+            };
+
+            Plotly.newPlot('chart-hall-of-fame', [trace], { ...layout, responsive: true });
+        }
+
+    </script>
+</body>
+</html>
